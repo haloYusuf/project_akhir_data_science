@@ -8,8 +8,6 @@ import pandas as pd
 
 url = "https://www.pinhome.id/dijual/cari/dki-jakarta-6?buildingType=building_type.house&sorter=last_modified_at_descend"
 
-
-
 if url :
     options = webdriver.ChromeOptions()
     options.add_argument("--start-maximized")
@@ -40,10 +38,7 @@ if url :
                         desc1.append(v.text.strip())
                     except AttributeError:
                         continue
-
-                
                 print(desc1)
-                print("ya")
                 rev = {
                     'type': house_type,
                     'price': price,
