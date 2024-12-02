@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import datetime, timedelta
 
 # Load file Excel
 file_path = 'rumah.xlsx'  # Ganti dengan path yang sesuai
@@ -30,8 +31,23 @@ def convert_price(price):
     except ValueError:
         return None  # Jika gagal mengonversi, kembalikan None
 
+# Fungsi untuk memproses kolom `date`
+def process_date(date_str):
+    if isinstance(date_str, str) and "hari" in date_str:
+        # Ekstrak jumlah hari
+        jumlah_hari = int(date_str.split()[1])
+        # Hitung tanggal
+        tanggal_diperbarui = datetime.now() - timedelta(days=jumlah_hari)
+    else:
+        # Gunakan tanggal saat ini jika tidak mengandung "hari"
+        tanggal_diperbarui = datetime.now()
+    return tanggal_diperbarui.strftime('%Y-%m-%d')
+
 # Mengonversi harga ke dalam satuan rupiah yang sesuai
 df['price'] = df['price'].apply(convert_price)
+
+# Terapkan fungsi ke kolom `date`
+df['date'] = df['date'].apply(process_date)
 
 # 5. Membersihkan kolom 'luas_tanah', 'luas_bangunan', dan 'kamar_tidur'
 def clean_size(value):

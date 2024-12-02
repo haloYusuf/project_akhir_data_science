@@ -16,7 +16,7 @@ if url :
     time.sleep(5)
 
     data = []
-    for i in range(0, 100):
+    for i in range(0, 225):
         soup = BeautifulSoup(driver.page_source, "html.parser")
         containers = soup.findAll('div', attrs = {'class':'pin-card___heavr pin-card_compact___ze5lh pin-card_pointer___1venj'})
         for container in containers:
@@ -30,6 +30,9 @@ if url :
                 type = container.find('h3', attrs = {'class':'pin-card__text_label2___41ezj pin-card__title___dflce'})
                 loc = container.find('p', attrs = {'class': 'pin-card__text_body3___kd1yj pin-card__text_color-subtle___12yde pin-card__ellipsis___xqz18'}).text
 
+                type = container.find('div', attrs = {'class':'pin-card__date-desc___3u6p8'})
+                date = container.find('p', attrs = {'class': 'pin-card__text_body3___kd1yj pin-card__text_color-subtle___12yde'}).text
+
                 listData = container.find('ul', attrs = {'class':'pin-card__bullet-list___d8lwu pin-card__text_body3___kd1yj pin-card__ellipsis___xqz18'})
                 desc = listData.findAll('li')
                 desc1 = []
@@ -38,8 +41,10 @@ if url :
                         desc1.append(v.text.strip())
                     except AttributeError:
                         continue
+                print(date)
                 print(desc1)
                 rev = {
+                    'date': date,
                     'type': house_type,
                     'price': price,
                     'loc': loc,
@@ -58,5 +63,5 @@ if url :
         time.sleep(2)
 
     print(data)
-    df = pd.DataFrame(data, columns=["type", "price", "loc", "kamar_tidur", "luas_tanah", "luas_bangunan", "sertifikasi"])
+    df = pd.DataFrame(data, columns=["date", "type", "price", "loc", "kamar_tidur", "luas_tanah", "luas_bangunan", "sertifikasi"])
     df.to_csv("rumah.csv", index=False)
