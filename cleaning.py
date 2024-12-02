@@ -17,7 +17,10 @@ df = df[df['price'].str.contains('-', na=False) == False]
 # 4. Menangani kolom 'price', mengonversinya ke dalam satuan rupiah
 def convert_price(price):
     # Menghapus prefix 'Rp' dan spasi
-    price = str(price).replace('Rp', '').replace(' ', '').replace(',', '')
+    price = str(price).replace('Rp', '').replace(' ', '')
+    
+    # Tangani koma sebagai desimal (jika ada)
+    price = price.replace(',', '.')
     
     # Jika harga mengandung 'Jt', kalikan dengan 1 juta
     if 'Jt' in price:
@@ -31,23 +34,8 @@ def convert_price(price):
     except ValueError:
         return None  # Jika gagal mengonversi, kembalikan None
 
-# Fungsi untuk memproses kolom `date`
-def process_date(date_str):
-    if isinstance(date_str, str) and "hari" in date_str:
-        # Ekstrak jumlah hari
-        jumlah_hari = int(date_str.split()[1])
-        # Hitung tanggal
-        tanggal_diperbarui = datetime.now() - timedelta(days=jumlah_hari)
-    else:
-        # Gunakan tanggal saat ini jika tidak mengandung "hari"
-        tanggal_diperbarui = datetime.now()
-    return tanggal_diperbarui.strftime('%Y-%m-%d')
-
 # Mengonversi harga ke dalam satuan rupiah yang sesuai
 df['price'] = df['price'].apply(convert_price)
-
-# Terapkan fungsi ke kolom `date`
-df['date'] = df['date'].apply(process_date)
 
 # 5. Membersihkan kolom 'luas_tanah', 'luas_bangunan', dan 'kamar_tidur'
 def clean_size(value):
@@ -55,7 +43,7 @@ def clean_size(value):
     value = str(value).replace('LT', '').replace('LB', '').replace('m²', '').replace('KT', '').strip()
     return ''.join(filter(str.isdigit, value))  # Hanya mengambil angka
 
-# Memisahkan kolom "loc" menjadi "kota" dan "provinsi"
+# Memisahkan kolom "loc" menjadi "kecamatan" dan "kota"
 df[['kecamatan', 'kota']] = df['loc'].str.split(',', expand=True)
 
 # Membersihkan data dengan menghapus spasi berlebih
