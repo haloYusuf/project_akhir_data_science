@@ -1,0 +1,576 @@
+---
+title: "Final Project DS"
+author: "Salma Hanifa 123220019, Fahmi Kariem 123220028, Diandra Yusuf Arrafi 123220031"
+date: "2024-12-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import Library yang Dibutuhkan
+```{r}
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(forcats)
+library(reshape2)
+library(patchwork)
+
+library(randomForest)
+library(caret)
+library(shiny)
+library(corrplot)
+
+```
+
+# Visualisasi Perbandingan data yang belum di filter dan data sesudah di filter
+## Untuk visualisasi yang belum dilakukan filter
+```{r}
+data_before_filtering = read.csv("rumah.csv")
+# Function to clean and convert 'price' to numeric
+clean_price = function(price) {
+  price = gsub("Rp", "", price)
+  price = gsub(",", ".", price)  # Replace commas with dots for decimal handling
+  price = gsub("\\s+", "", price)  # Remove whitespace
+  
+  if (grepl("Jt", price)) {
+    return(as.numeric(gsub("Jt", "", price)) * 1e6)  # Convert Jt to numeric
+  } else if (grepl("M", price)) {
+    return(as.numeric(gsub("M", "", price)) * 1e9)  # Convert M to numeric
+  } else if (grepl("-", price)) {  # Handle ranges
+    values = as.numeric(unlist(strsplit(price, "-")))
+    return(min(values, na.rm = TRUE) * 1e9)  # Assume range values in billions (M)
+  }
+  return(NA)
+}
+
+# Apply cleaning function
+data_before_filtering$price_clean = sapply(data_before_filtering$price, clean_price)
+
+# Categorize into price ranges
+data_before_filtering = data_before_filtering %>%
+  mutate(
+    price_category = cut(
+      price_clean,
+      breaks = c(0, 1e9, 5e9, 10e9, Inf),
+      labels = c("Dibawah 1M", "1-5M", "5-10M", "Diatas 10M")
+    )
+  )
+
+# Count occurrences in each category
+category_counts = data_before_filtering %>%
+  group_by(price_category) %>%
+  summarise(count = n())
+
+# Plot barplot with detailed customization
+ggplot(category_counts, aes(x = price_category, y = count, fill = price_category)) +
+  geom_bar(stat = "identity", color = "black") +  # Add black border to bars
+  geom_text(aes(label = count), vjust = -0.5, size = 4) +  # Add annotations on bars
+  theme_minimal() +
+  labs(
+    title = "Distribusi Data Berdasarkan Rentang Harga (Sebelum Filtering)",
+    x = "Rentang Harga",
+    y = "Jumlah Data"
+  ) +
+  scale_fill_manual(
+    values = c("Dibawah 1M" = "#4CAF50", "1-5M" = "#2196F3", "5-10M" = "#FFC107", "Diatas 10M" = "#F44336")
+  ) +  # Custom color for each category
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),  # Centered title
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "none",  # Remove legend since categories are self-explanatory
+    axis.text.x = element_text(angle = 0, hjust = 0.5)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))  # Add space above bars
+```
+
+## Untuk visualisasi yang sudah dilakukan filter
+```{r}
+data_main = read.csv("rumah_cleaned.csv")
+# Kategorikan harga ke dalam rentang
+data_after_filtering = data_main %>%
+  mutate(
+    price_category = cut(
+      price,
+      breaks = c(0, 1000, 5000, 10000, Inf),
+      labels = c("Dibawah 1M", "1-5M", "5-10M", "Diatas 10M")
+    )
+  )
+
+# Hitung jumlah data dalam setiap kategori
+category_counts_new_data = data_after_filtering %>%
+  group_by(price_category) %>%
+  summarise(count = n())
+
+# Membuat barplot
+ggplot(category_counts_new_data, aes(x = price_category, y = count, fill = price_category)) +
+  geom_bar(stat = "identity", color = "black") +  # Tambahkan border hitam pada batang
+  geom_text(aes(label = count), vjust = -0.5, size = 4) +  # Anotasi jumlah data di atas batang
+  theme_minimal() +
+  labs(
+    title = "Distribusi Data Berdasarkan Rentang Harga (Sesudah Filtering)",
+    x = "Rentang Harga",
+    y = "Jumlah Data"
+  ) +
+  scale_fill_manual(
+    values = c("Dibawah 1M" = "#4CAF50", "1-5M" = "#2196F3", "5-10M" = "#FFC107", "Diatas 10M" = "#F44336")
+  ) +  # Warna khusus untuk setiap kategori
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),  # Judul di tengah
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "none",  # Hilangkan legenda karena kategori sudah jelas
+    axis.text.x = element_text(angle = 0, hjust = 0.5)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))  # Tambahkan ruang di atas batang
+```
+
+# Visualisasi Sebelum Outlier Dihapus
+## Visualisasi Scatter Plot untuk membandingan harga dengan parameter yang ingin digunakan
+```{r}
+# Scatter plot 1: Luas Bangunan vs Harga
+plot1 = ggplot(data_main, aes(x = luas_bangunan, y = price)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Luas Bangunan vs Harga",
+    x = "Luas Bangunan (m2)",
+    y = "Harga (juta)"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Scatter plot 2: Luas Tanah vs Harga
+plot2 = ggplot(data_main, aes(x = luas_tanah, y = price)) +
+  geom_point(color = "green", alpha = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Luas Tanah vs Harga",
+    x = "Luas Tanah (m2)",
+    y = "Harga (juta)"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Scatter plot 3: Kamar Tidur vs Harga
+plot3 = ggplot(data_main, aes(x = kamar_tidur, y = price)) +
+  geom_point(color = "red", alpha = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Kamar Tidur vs Harga",
+    x = "Kamar Tidur",
+    y = "Harga (juta)"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Combine the plots into one page
+combined_plot = (plot1 | plot2) / plot3
+
+# Print the combined plot
+print(combined_plot)
+```
+
+## Visualisasi heatmap
+```{r}
+# Filter numerical variables and calculate correlation matrix
+numerical_data = data_main %>%
+  select(price, luas_tanah, luas_bangunan, kamar_tidur)
+
+cor_matrix = cor(numerical_data, use = "complete.obs")  # Calculate correlations
+
+# Reshape correlation matrix for heatmap
+cor_melt = melt(cor_matrix)
+
+# Heatmap for numerical correlations with annotations
+ggplot(cor_melt, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +  # Add border color for better separation
+  geom_text(aes(label = sprintf("%.2f", value)), color = "black", size = 4) +  # Add correlation values
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0,
+                       limit = c(-1, 1), space = "Lab",
+                       name = "Correlation") +
+  theme_minimal() +
+  labs(
+    title = "Heatmap Korelasi Variabel Numerik dengan Keterangan Angka",
+    x = NULL,
+    y = NULL
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+```
+
+# Proses Penghapusan Outlier
+## Melihat banyaknya outlier yang terdeteksi
+```{r}
+# Menggunakan IQR untuk menghapus outlier dari kolom 'price'
+# Fungsi untuk mendeteksi outlier menggunakan IQR
+detect_outliers_IQR = function(df, column_name) {
+  Q1 = quantile(df[[column_name]], 0.25)
+  Q3 = quantile(df[[column_name]], 0.75)
+  IQR_value = Q3 - Q1
+  lower_bound = Q1 - 1.5 * IQR_value
+  upper_bound = Q3 + 1.5 * IQR_value
+  
+  # Menyaring data outlier
+  outliers = df %>%
+    filter(df[[column_name]] < lower_bound | df[[column_name]] > upper_bound)
+  
+  return(outliers)
+}
+
+cat("Jumlah outlier pada price:", nrow(detect_outliers_IQR(data_main, "price")), "\n")
+cat("Jumlah outlier pada luas_tanah:", nrow(detect_outliers_IQR(data_main, "luas_tanah")), "\n")
+cat("Jumlah outlier pada luas_bangunan:", nrow(detect_outliers_IQR(data_main, "luas_bangunan")), "\n")
+cat("Jumlah outlier pada kamar_tidur:", nrow(detect_outliers_IQR(data_main, "kamar_tidur")), "\n")
+```
+
+## Menghapus outlier yang terdeteksi
+```{r}
+# Fungsi untuk mendeteksi dan menghapus outlier menggunakan IQR
+remove_outliers_IQR = function(df, column_name) {
+  # Menghitung Q1, Q3, dan IQR
+  Q1 = quantile(df[[column_name]], 0.25)
+  Q3 = quantile(df[[column_name]], 0.75)
+  IQR_value = Q3 - Q1
+  lower_bound = Q1 - 1.5 * IQR_value
+  upper_bound = Q3 + 1.5 * IQR_value
+  
+  # Menghapus data yang berada di luar rentang batas bawah dan atas
+  df_no_outliers = df %>%
+    filter(df[[column_name]] >= lower_bound & df[[column_name]] <= upper_bound)
+  
+  return(df_no_outliers)
+}
+
+data_clean = remove_outliers_IQR(data_main, "price")
+data_clean = remove_outliers_IQR(data_clean, "luas_tanah")
+data_clean = remove_outliers_IQR(data_clean, "luas_bangunan")
+data_clean = remove_outliers_IQR(data_clean, "kamar_tidur")
+```
+
+## Menghapus data yang memiliki harga diluar batas
+
+```{r}
+# Menentukan nilai batas harga yang terlalu kecil
+batas_harga_min = 500
+
+# Menentukan nilai batas harga yang terlalu Besar
+batas_harga_max = 10000
+
+# Menghapus data dengan harga diluar range
+data_clean = data_clean %>%
+  filter(price >= batas_harga_min) %>%
+  filter(price < batas_harga_max)
+```
+
+## Menampilkan statistik deskriptif dari harga rumah
+
+```{r}
+summary(data_clean$price)
+```
+
+# Visualisasi Setelah Outlier Dihapus
+## Visualisasi Scatter Plot untuk membandingan harga dengan parameter yang ingin digunakan
+```{r}
+# Scatter plot 1: Luas Bangunan vs Harga
+plot1 = ggplot(data_clean, aes(x = luas_bangunan, y = price)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Luas Bangunan vs Harga",
+    x = "Luas Bangunan (m2)",
+    y = "Harga (juta)"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Scatter plot 2: Luas Tanah vs Harga
+plot2 = ggplot(data_clean, aes(x = luas_tanah, y = price)) +
+  geom_point(color = "green", alpha = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Luas Tanah vs Harga",
+    x = "Luas Tanah (m2)",
+    y = "Harga (juta)"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Scatter plot 3: Kamar Tidur vs Harga
+plot3 = ggplot(data_clean, aes(x = kamar_tidur, y = price)) +
+  geom_point(color = "red", alpha = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Kamar Tidur vs Harga",
+    x = "Kamar Tidur",
+    y = "Harga (juta)"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Combine the plots into one page
+combined_plot = (plot1 | plot2) / plot3
+
+# Print the combined plot
+print(combined_plot)
+```
+
+## Visualisasi heatmap
+```{r}
+# Filter numerical variables and calculate correlation matrix
+numerical_data = data_clean %>%
+  select(price, luas_tanah, luas_bangunan, kamar_tidur)
+
+cor_matrix = cor(numerical_data, use = "complete.obs")  # Calculate correlations
+
+# Reshape correlation matrix for heatmap
+cor_melt = melt(cor_matrix)
+
+# Heatmap for numerical correlations with annotations
+ggplot(cor_melt, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +  # Add border color for better separation
+  geom_text(aes(label = sprintf("%.2f", value)), color = "black", size = 4) +  # Add correlation values
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0,
+                       limit = c(-1, 1), space = "Lab",
+                       name = "Correlation") +
+  theme_minimal() +
+  labs(
+    title = "Heatmap Korelasi Variabel Numerik dengan Keterangan Angka",
+    x = NULL,
+    y = NULL
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+```
+
+# Modelling
+## Transformasi data price
+```{r}
+data_model = data_clean
+data_model$price = log(data_clean$price + 1)
+```
+
+## Visualisasi data price sebelum dan sesudah dinormalisasi
+```{r}
+# Plot histogram sebelum normalisasi
+plot_before = ggplot(data_clean, aes(x = price)) +
+  geom_histogram(binwidth = 500, fill = "skyblue", color = "black", alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Distribusi Harga Sebelum Normalisasi",
+    x = "Harga",
+    y = "Frekuensi"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Plot histogram setelah normalisasi
+plot_after = ggplot(data_model, aes(x = price)) +
+  geom_histogram(binwidth = 0.5, fill = "lightgreen", color = "black", alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Distribusi Harga Setelah Normalisasi (Log)",
+    x = "Log Harga",
+    y = "Frekuensi"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Gabungkan kedua plot dalam satu tampilan
+library(patchwork)
+combined_plot = plot_before / plot_after
+print(combined_plot)
+```
+
+## Pisahkan data menjadi x(fitur) dan y(target)
+```{r}
+X = data_model[, c("kamar_tidur", "luas_tanah", "luas_bangunan", "kota")]
+y = data_model$price
+```
+
+## Membagi data menjadi dua (Training 80%, Testing 20%)
+```{r}
+set.seed(123)
+trainIndex = createDataPartition(y, p = 0.8, list = FALSE)
+train_data = data_model[trainIndex,]
+test_data = data_model[-trainIndex,]
+```
+
+## Menyiapkan data untuk Random Forest
+```{r}
+train_features = train_data[, c("kamar_tidur", "luas_tanah", "luas_bangunan", "kota")]
+test_features = test_data[, c("kamar_tidur", "luas_tanah", "luas_bangunan", "kota")]
+train_target = train_data$price
+test_target = test_data$price
+```
+
+## Melakukan normalisasi fitur
+
+```{r}
+pre_process = preProcess(train_features, method = "scale")
+train_features_scaled = predict(pre_process, train_features)
+test_features_scaled = predict(pre_process, test_features)
+```
+
+## Tuning model
+
+```{r}
+tune_grid = expand.grid(.mtry = c(1, 2, 3, 4, 5))  # Tuning mtry
+rf_tuned = train(
+  price ~ kamar_tidur + luas_tanah + luas_bangunan + kota, 
+  data = train_data,
+  method = "rf",
+  tuneGrid = tune_grid,
+  trControl = trainControl(method = "cv", number = 5))  # Cross-validation
+
+saveRDS(rf_tuned, "rf_model_tuned.rds")
+```
+
+## Prediksi rumah dengan model yang sudah di tuning
+
+```{r}
+rf_pred = predict(rf_tuned, newdata = test_data)
+```
+
+## Menghitung R-Square, RMRE, MAE, RSE
+
+```{r}
+# Menghitung R-squared untuk evaluasi model
+rss = sum((rf_pred - test_target)^2)  # Residual Sum of Squares
+tss = sum((test_target - mean(test_target))^2)  # Total Sum of Squares
+r_squared = 1 - (rss / tss)  # R-squared
+
+# Menghitung RMSE (Root Mean Squared Error)
+mse = mean((rf_pred - test_target)^2)  # Mean Squared Error
+rmse = sqrt(mse)  # Root Mean Squared Error
+
+# Menghitung MAE (Mean Absolute Error)
+mae = mean(abs(rf_pred - test_target))  # Mean Absolute Error
+
+# Menghitung RSE (Residual Standard Error)
+rse = sqrt(sum((rf_pred - test_target)^2) / (length(test_target) - 2))  # Residual Standard Error
+
+# Output hasil evaluasi model
+cat("R-squared for Random Forest model: ", r_squared, "\n")
+cat("RMSE for Random Forest model: ", rmse, "\n")
+cat("MAE for Random Forest model: ", mae, "\n")
+cat("RSE for Random Forest model: ", rse, "\n")
+cat("MSE for Random Forest model: ", mse, "\n")
+```
+
+## Mengembalikan data price yang sebelumnya ditransformasi
+
+```{r}
+# Mengembalikan prediksi yang telah ter-transformasi ke harga asli (inversi log)
+rf_pred_original_scale = exp(rf_pred) - 1
+
+# Mengembalikan target asli ke harga (jika target juga di-transformasi)
+test_target_original_scale <- exp(test_target) - 1
+```
+
+## Menampikan perbandingan prediksi dengan data yang sebenarnya
+
+```{r}
+results = data.frame(Actual = test_target_original_scale, Predicted = rf_pred_original_scale)
+head(results)
+```
+
+## Menampilkan dalam bentuk visualisasi
+
+```{r}
+ggplot(results, aes(x = Actual, y = Predicted)) +
+  geom_point(color = "blue") +  # Titik untuk data aktual vs prediksi
+  geom_abline(slope = 1, intercept = 0, color = "red") +  # Garis y = x (ideal prediksi)
+  labs(title = "Prediksi vs Actual Harga Rumah",
+       x = "Harga Rumah Aktual",
+       y = "Harga Rumah Prediksi") +
+  theme_minimal()
+```
+
+# Shiny
+```{r}
+ui = fluidPage(
+  titlePanel("Prediksi Harga Rumah"),
+  sidebarLayout(
+    sidebarPanel(
+      numericInput("kamar", "Jumlah Kamar Tidur:", value = 3, min = 1, max = 10),
+      numericInput("luas_tanah", "Luas Tanah (m²):", value = 100, min = 1),
+      numericInput("luas_bangunan", "Luas Bangunan (m²):", value = 80, min = 1),
+      selectInput("kota", "Kota:", choices = unique(data_model$kota)),
+      actionButton("predict", "Prediksi Harga")
+    ),
+    mainPanel(
+      textOutput("pred_price"),
+      plotOutput("plot_price"),
+      verbatimTextOutput("r_squared")
+    )
+  )
+)
+
+server = function(input, output) {
+  observeEvent(input$predict, {
+    # Inputan dari UI
+    new_data = data.frame(
+      kamar_tidur = input$kamar,
+      luas_tanah = input$luas_tanah,
+      luas_bangunan = input$luas_bangunan,
+      kota = input$kota
+    )
+
+    # Prediksi harga dengan model Random Forest
+    rf_pred_new = predict(rf_tuned, newdata = new_data)
+
+    # Mengembalikan harga asli setelah transformasi log
+    predicted_price = exp(rf_pred_new) - 1
+    
+    # Mengalikan hasil prediksi dengan 1,000,000
+    predicted_price = predicted_price * 1000000
+
+    # Menampilkan hasil prediksi
+    output$pred_price <- renderText({
+      paste("Prediksi Harga Rumah: Rp", format(predicted_price, big.mark = ".", scientific = FALSE))
+    })
+  })
+}
+
+shinyApp(ui = ui, server = server)
+```
+
