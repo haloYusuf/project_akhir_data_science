@@ -70,7 +70,7 @@ ggplot(category_counts, aes(x = price_category, y = count, fill = price_category
   geom_text(aes(label = count), vjust = -0.5, size = 4) +  # Add annotations on bars
   theme_minimal() +
   labs(
-    title = "Distribusi Data Berdasarkan Rentang Harga (Sebelum Filtering)",
+    title = "Distribusi Data Berdasarkan Rentang Harga (Sebelum Cleaning)",
     x = "Rentang Harga",
     y = "Jumlah Data"
   ) +
@@ -111,7 +111,7 @@ ggplot(category_counts_new_data, aes(x = price_category, y = count, fill = price
   geom_text(aes(label = count), vjust = -0.5, size = 4) +  # Anotasi jumlah data di atas batang
   theme_minimal() +
   labs(
-    title = "Distribusi Data Berdasarkan Rentang Harga (Sesudah Filtering)",
+    title = "Distribusi Data Berdasarkan Rentang Harga (Sesudah Cleaning)",
     x = "Rentang Harga",
     y = "Jumlah Data"
   ) +
